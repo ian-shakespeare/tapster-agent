@@ -1,0 +1,10 @@
+[project]
+name = "6300-assignment-1"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "dotenv>=0.9.9",
+    "smolagents[openai,toolkit,transformers]>=1.21.2",
+]
