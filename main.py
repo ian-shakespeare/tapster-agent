@@ -1,71 +1,167 @@
 from datetime import datetime
-from smolagents import CodeAgent, OpenAIServerModel, Tool
-from sqlalchemy import (Column, DateTime, Integer, MetaData, String,
-                        Table, create_engine, insert)
+from smolagents import CodeAgent, OpenAIServerModel, ToolCallingAgent, WebSearchTool, tool
 import dotenv
 import os
+import requests
+import urllib.parse
+import sqlite3
 
 
-engine = create_engine("sqlite:///tapster.db")
-metadata_obj = MetaData()
+def dict_factory(cursor, row):
+    d = {}
+    for idx, col in enumerate(cursor.description):
+        d[col[0]] = row[idx]
+    return d
 
 
-def insert_rows_into_table(rows, table, engine=engine):
-    for row in rows:
-        stmt = insert(table).values(**row)
-        with engine.begin() as connection:
-            connection.execute(stmt)
+conn = sqlite3.connect("tapster.db")
+conn.row_factory = dict_factory
+cursor = conn.cursor()
 
 
-recipes = Table(
-    "recipes",
-    metadata_obj,
-    Column("recipe_id", Integer, primary_key=True),
-    Column("name", String(64), nullable=False, unique=True),
-    Column("instructions", String(5000), nullable=False),
-    Column("created_at", DateTime, nullable=False, default=datetime.now)
-)
-
-metadata_obj.create_all(engine)
+def sanitize_cocktail_name(name: str) -> str:
+    return name.replace(' ', '_').lower()
 
 
-class SQLEngine(Tool):
-    pass
+def get_cocktail_id(name: str) -> int | None:
+    name = sanitize_cocktail_name(name)
+    res = cursor.execute(
+        "select cocktail_id from cocktails where name like ? limit 1", ['%' + name + '%'])
+    row: dict[str, int] | None = res.fetchone()
+
+    if row is None:
+        return None
+
+    return row["cocktail_id"]
 
 
-class Calculator(Tool):
-    name = "calculator"
-    description = (
-        "Computes the result of a mathematical expression."
-        "The expression must be valid Python 3 syntax."
-    )
-    inputs: dict = {
-        "expressions": {
-            "type": "string",
-            "description": "The Python expression to evaluate.",
-        }
-    }
-    output_type = "string"
+def fetch_cocktail_instructions(id: int) -> str:
+    res = cursor.execute(
+        "select instructions from cocktails where cocktail_id = ?", [str(id)])
+    row: dict[str, str] | None = res.fetchone()
+    if row is None:
+        raise Exception("no suck cocktail")
 
-    def forward(self, expressions: str) -> str:
-        """
-        Evaluates the mathematical python expression and returns the result.
+    return row["instructions"]
 
-        Args:
-            expression: The python mathematical expression.
 
-        Returns:
-            The numerical result of evaluating the expression.
-        """
-        return str(eval(expressions))
+def insert_cocktail(name: str, instructions: str):
+    cursor.execute("insert into cocktails (name, instructions, created_at) values (?,?,?)",
+                   [sanitize_cocktail_name(name), instructions, str(datetime.now())])
+    conn.commit()
+
+
+def search_cocktail(name: str) -> str:
+    name = urllib.parse.quote(name.lower())
+    url = "https://www.thecocktaildb.com/api/json/v1/1/search.php?s=" + name
+    response = requests.get(url)
+    response.raise_for_status()
+    body: dict[str, list[dict[str, str]]] = response.json()
+    drinks = body["drinks"]
+
+    if len(drinks) < 1:
+        raise Exception(f"{name} recipe not found")
+
+    cocktail = drinks[0]
+
+    instructions = cocktail["strInstructions"]
+    ingredients: list[str] = []
+    index = 1
+    while True:
+        ingredient = cocktail["strIngredient" + str(index)]
+        if ingredient is None:
+            break
+        ingredient = ingredient.strip()
+
+        measure = cocktail["strMeasure" + str(index)]
+        if measure is not None:
+            ingredient += f" ({measure.strip()})"
+
+        ingredients.append(ingredient)
+        index += 1
+    ingredientsStr = "- " + "\r\n- ".join(ingredients) + "\r\n"
+
+    content = f"# Ingredients\r\n\r\n{ingredientsStr}\r\n# Instructions\r\n\r\n{instructions}"
+
+    return content
+
+
+@tool
+def get_cocktail(name: str) -> str:
+    """
+    Retrieve a cocktail recipe in markdown format.
+
+    Args:
+        name: The cocktail name.
+
+    Returns:
+        Markdown string of the cocktail recipe, or an error message if a cocktail can't be found.
+    """
+    cocktail_id = get_cocktail_id(name)
+    if cocktail_id is not None:
+        instructions = fetch_cocktail_instructions(cocktail_id)
+        return instructions
+
+    try:
+        instructions = search_cocktail(name)
+        return instructions
+    except requests.RequestException as e:
+        return f"Error getting webpage: {str(e)}"
+    except Exception as e:
+        return f"Unexpected error: {str(e)}"
+
+
+@tool
+def save_cocktail(name: str, instructions: str) -> str:
+    """
+    Saves a cocktail recipe for later use.
+
+    Args:
+        name: The cocktail name.
+        instructions: Markdown recipe for the cocktail.
+
+    Returns:
+        An empty string, or an error message if the cocktail couldn't be saved.
+    """
+    try:
+        insert_cocktail(name, instructions)
+        return ""
+    except Exception as e:
+        return f"Error saving cocktail: {str(e)}"
+
+
+@tool
+def validate_cocktail_recipe(recipe: str) -> bool:
+    """
+    Determines whether the given cocktail recipe is safe for human consumption.
+
+    Args:
+        recipe: Markdown recipe for a cocktail.
+
+    Returns:
+        True if the recipe is safe, False otherwise
+    """
+    # Is this good? No. Does it work? Yes.
+    recipe = recipe.lower()
+    poisons = ["acetaminophen", "acetone", "advil", "alavert", "amaryllis", "amphetamines", "antifreeze", "aquaphor", "arsenic", "benzocaine", "benzodiazepines", "bleach", "buprenorphine (suboxone)", "carbon monoxide", "cetirizine", "chlorine", "cimetidine", "dandelions", "diethyltoluamide", "desitin", "dextromethorphan", "diphenhydramine", "domoic acid", "ex-lax", "famotidine", "fentanyl", "fluoride", "guaifenesin", "guanfacine", "intuniv", "ipecac",
+               "kratom", "laundry pods", "lead", "liquid nicotine", "loratadine", "magnets", "marker ink", "mdma", "mercury", "methamphetamine", "mold", "motrin", "mucinex", "mushrooms", "nicotine", "nizatidine", "opioids", "pepcid", "poinsettia", "poison ivy", "pseudoephedrine", "radon", "ranitidine", "salmonella", "saxitoxin", "senakot", "senna", "sodium hypochlorite", "spice", "stimulants", "suboxone", "synthetic cathinones", "tagamet", "tenex", "veratrum viride", "zantac", "zyrtec"]
+    for poison in poisons:
+        if poison in recipe:
+            return False
+    return True
 
 
 def main():
     dotenv.load_dotenv()
 
-    tool = Calculator()
-    tools: list[Tool] = [tool]
-    additional_authorized_imports = []
+    cursor.execute("""
+    create table if not exists cocktails (
+        cocktail_id integer primary key,
+        name text unique not null,
+        instructions text not null,
+        created_at datetime default current_timestamp
+    );
+    """)
 
     model_id = "gemini-2.5-flash"
     model = OpenAIServerModel(
@@ -73,18 +169,22 @@ def main():
         api_base="https://generativelanguage.googleapis.com/v1beta/openai/",
         api_key=os.getenv("GEMINI_API_KEY"),
     )
-    agent = CodeAgent(
-        tools=tools,
+
+    agent = ToolCallingAgent(
+        tools=[get_cocktail, save_cocktail, validate_cocktail_recipe],
         model=model,
-        additional_authorized_imports=additional_authorized_imports,
-        max_steps=3,
+        max_steps=10,
+        name="cocktail_agent",
+        description="An agent to find, save, and validate cocktail recipes.",
     )
 
     while True:
-        prompt = input("Enter a math problem: ")
+        prompt = input("Ask Tapster a question: ")
         answer = agent.run(prompt.strip())
         print(f"Agent returned: {answer}")
 
 
 if __name__ == "__main__":
     main()
+    cursor.close()
+    conn.close()

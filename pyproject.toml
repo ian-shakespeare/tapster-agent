@@ -6,6 +6,6 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "dotenv>=0.9.9",
+    "requests>=2.32.5",
     "smolagents[openai,toolkit,transformers]>=1.21.2",
-    "sqlalchemy>=2.0.43",
 ]
