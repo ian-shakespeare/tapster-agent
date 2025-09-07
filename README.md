@@ -42,5 +42,5 @@ uv run main.py
 
 ## Docs
 
-[Design Brief](https://github.com/ian-shakespeare/tapster-agent/blob/main/docs/design.md)
-[Project Postmortem](https://github.com/ian-shakespeare/tapster-agent/blob/main/docs/reflection.md)
+- [Design Brief](https://github.com/ian-shakespeare/tapster-agent/blob/main/docs/design.md)
+- [Project Postmortem](https://github.com/ian-shakespeare/tapster-agent/blob/main/docs/reflection.md)
