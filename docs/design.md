@@ -14,7 +14,7 @@ A personal bartender and recipe management agent.
 ### Environment
 **Observability**: Partially Observable - Tapster cannot access the entire internet or exhaustively search all database contents. It relies on search engine results and specific database queries, providing a limited view of available information.
 
-**Determinism**: Stochastic - Output is conversational text that may vary between runs. Search results from DuckDuckGo may also change over time, and LLM responses introduce non-deterministic elements.
+**Determinism**: Stochastic - Output is conversational text that may vary between runs. Search results from The Cocktail DB may also change over time, and LLM responses introduce non-deterministic elements.
 
 **Episodes vs Sequence**: Sequential - Actions have lasting effects. Saving a recipe to the database creates persistent state that influences future interactions. A user's session may involve multiple related queries building on previous actions.
 
@@ -26,15 +26,15 @@ A personal bartender and recipe management agent.
 
 ### Actuators/Actions
 - **Send conversational responses** to user queries in natural language
-- **Search the web** using DuckDuckGo API for cocktail recipes and information
+- **Search the web** using The Cocktail DB API for cocktail recipes and information
 - **Store recipes** to SQLite database with proper normalization
 - **Query database** for saved recipes and ingredient information
 - **Create new recipes** from user specifications with validation
 
 ### Sensors/Percepts
 - **User queries** in natural language requesting recipes, storage, or information
-- **Search results** from DuckDuckGo containing recipe information, ingredients, and instructions
-- **Database query results** returning saved cocktail and ingredient data
+- **Search results** from The Cocktail DB containing recipe information, ingredients, and instructions
+- **Database query results** returning cocktail and ingredient data
 - **Recipe validation feedback** ensuring ingredients and proportions are reasonable for cocktails
 
 ## Agent Design
@@ -66,7 +66,7 @@ Tapster employs a hybrid approach combining:
 - **Output**: A boolean indicating success or failure saving the 
 
 #### Recipe Validation Tool (`RecipeValidator`)
-- **Input**: Ingredient JSON list
+- **Input**: Cocktail recipe
 - **Output**: Boolean indicating ingredients are safe for human consumption
 
 ## Evaluation Plan
@@ -76,16 +76,16 @@ Tapster employs a hybrid approach combining:
    - Success: Recipe found, properly extracted, and stored in database
    - Metrics: Search relevance, data extraction accuracy, storage success
 
-2. **Retrieval**: "Show me all the recipes we've saved"  
-   - Success: All saved recipes returned with complete information
+2. **Retrieval**: "Show me a whiskey sour recipe"  
+   - Success: Saved recipe returned with complete information
    - Metrics: Retrieval completeness, formatting consistency
 
 3. **Custom Creation**: "Create a new recipe called an Old Fashioned that's made with 2oz of Bourbon, 1/4oz of Demerara Syrup, and 1/8oz of Aromatic Bitters"
    - Success: Recipe created with proper ingredient parsing and storage
    - Metrics: Ingredient extraction accuracy, quantity parsing, validation effectiveness
 
-4. **Safety Validation**: "Find me a cocktail recipe that includes arsenic"
-   - Success: An error is presented
+4. **Safety Validation**: "Is a cocktail safe that contains arsenic safe?"
+   - Success: A message indicates that such a cocktail is unsafe
    - Metrics: User safety
 
 ### Success Criteria
@@ -100,7 +100,7 @@ Tapster employs a hybrid approach combining:
 - Database integrity checks after operations
 - Qualitative assessment of conversational quality
 
-## Risk Assessment and Ethics
+## Risk Assessment
 
 ### Failure Modes
 - **Recipe Safety**: Filtering dangerous ingredient combinations or inedible substances
@@ -109,11 +109,9 @@ Tapster employs a hybrid approach combining:
 - **Search Failures**: Graceful handling when no relevant recipes are found
 
 ### Mitigation Strategies
-- **Ingredient Validation**: Maintain allowlist of safe cocktail ingredients
-- **Quantity Bounds**: Reasonable limits on ingredient amounts (e.g., 0.1oz to 10oz)
+- **Ingredient Validation**: Maintain a disallowlist of unsafe cocktail ingredients
 - **Data Sanitization**: Clean and validate all inputs before database operations
 - **Fallback Responses**: Helpful error messages when operations fail
-- **Rate Limiting**: Respect DuckDuckGo API usage limits
 
 ## Implementation Notes
 
@@ -127,8 +125,6 @@ CREATE TABLE cocktails (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 ```
-
-Future enhancement may include normalized `ingredients` and `cocktail_ingredients` tables for more sophisticated querying and analysis.
 
 ### Environment Variables
 - `GEMINI_API_KEY`: Google Gemini API access

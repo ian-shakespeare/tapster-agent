@@ -1,5 +1,5 @@
 from datetime import datetime
-from smolagents import CodeAgent, OpenAIServerModel, ToolCallingAgent, WebSearchTool, tool
+from smolagents import OpenAIServerModel, ToolCallingAgent, tool
 import dotenv
 import os
 import requests
@@ -40,7 +40,7 @@ def fetch_cocktail_instructions(id: int) -> str:
         "select instructions from cocktails where cocktail_id = ?", [str(id)])
     row: dict[str, str] | None = res.fetchone()
     if row is None:
-        raise Exception("no suck cocktail")
+        raise Exception("no such cocktail")
 
     return row["instructions"]
 
