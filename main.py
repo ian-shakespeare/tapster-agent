@@ -86,6 +86,77 @@ def search_cocktail(name: str) -> str:
     return content
 
 
+def convert_quantity_to_ounce(quantity: str) -> float:
+    [value, unit] = quantity.split(" ")
+    if unit in ["oz", "ounce", "ounces"]:
+        value = int(value)
+    elif unit in ["dash", "dashes"]:
+        value = 0.125 * int(value)
+    elif unit in ["barspoon", "barspoons"]:
+        value = 0.25 * int(value)
+    elif unit in ["tsp", "teaspoon", "teaspoons"]:
+        value = int(value) / 6
+    else:
+        # assume it's a garnish or too small an amount to calculate
+        value = 0.0
+
+    return value
+
+
+def get_ingredient_calories(ingredient: dict[str, str]) -> int:
+    name = ingredient["name"].lower()
+    quantity = ingredient["quantity"].lower()
+
+    if name is None or name == "":
+        raise Exception("invalid name")
+
+    if quantity is None or quantity == "":
+        raise Exception("invalid quantity")
+
+    value = convert_quantity_to_ounce(quantity)
+
+    for spirit in ["bourbon", "gin", "rum", "tequila", "vodka", "whiskey"]:
+        if spirit in name:
+            return int(value * 65)
+
+    for syrup in ["syrup", "grenadine", "orgeat"]:
+        if syrup in name:
+            return int(value * 50)
+
+    if "bitters" in name:
+        return int(value * 10)
+
+    if "sugar" in name:
+        return int(value * 110)
+
+    return 0
+
+
+def get_ingredient_alcohol_content(ingredient: dict[str, str]) -> float:
+    name = ingredient["name"].lower()
+    quantity = ingredient["quantity"].lower()
+
+    value = convert_quantity_to_ounce(quantity)
+
+    lookup = {
+        "bourbon": 0.4,
+        "chartreuse": 0.5,
+        "falernum": 0.15,
+        "gin": 0.4,
+        "maraschino": 0.3,
+        "rum": 0.4,
+        "tequila": 0.4,
+        "vodka": 0.4,
+        "whiskey": 0.4,
+    }
+
+    for key, content in lookup.items():
+        if key in name:
+            return value * content
+
+    return 0.0
+
+
 @tool
 def get_cocktail(name: str) -> str:
     """
@@ -151,6 +222,53 @@ def validate_cocktail_recipe(recipe: str) -> bool:
     return True
 
 
+@tool
+def calculate_calories(ingredients: list[dict[str, str]]) -> int | str:
+    """
+    Calculates the total calorie count for a set of ingredients.
+
+    Args:
+        ingredients: A list of objects with a `name` string and `quantity` string. E.g. `[{"name": "vodka", "quantity": "1 oz"}]`
+
+    Returns:
+        An integer representing the total calorie count for the given ingredients, or an error message if unsuccessful
+    """
+    try:
+        calories = 0
+        for ingredient in ingredients:
+            calories += get_ingredient_calories(ingredient)
+        return calories
+    except Exception as e:
+        return f"Error calculating calories: {str(e)}"
+
+
+@tool
+def calculate_abv(ingredients: list[dict[str, str]]) -> float | str:
+    """
+    Calculates the alcohol by volume (ABV) for a set of ingredients.
+
+    Args:
+        ingredients: A list of objects with a `name` string and `quantity` string. E.g. `[{"name": "vodka", "quantity": "1 oz"}]`
+
+    Returns:
+        A float representing the ABV for the given ingredients, or an error message if unsuccessful
+    """
+    try:
+        total_size = 0.0
+        alcohol_content = 0.0
+        for ingredient in ingredients:
+            quantity = ingredient["quantity"]
+            if quantity is None or quantity == "":
+                return "Error calculation ABV: invalid quantity value"
+
+            total_size += convert_quantity_to_ounce(quantity)
+            alcohol_content += get_ingredient_alcohol_content(ingredient)
+
+        return alcohol_content / total_size
+    except Exception as e:
+        return f"Error calculation ABV: {str(e)}"
+
+
 def main():
     dotenv.load_dotenv()
 
@@ -171,7 +289,8 @@ def main():
     )
 
     agent = ToolCallingAgent(
-        tools=[get_cocktail, save_cocktail, validate_cocktail_recipe],
+        tools=[get_cocktail, save_cocktail, validate_cocktail_recipe,
+               calculate_calories, calculate_abv],
         model=model,
         max_steps=10,
         name="cocktail_agent",
