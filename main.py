@@ -89,13 +89,13 @@ def search_cocktail(name: str) -> str:
 def convert_quantity_to_ounce(quantity: str) -> float:
     [value, unit] = quantity.split(" ")
     if unit in ["oz", "ounce", "ounces"]:
-        value = int(value)
+        value = float(value)
     elif unit in ["dash", "dashes"]:
-        value = 0.125 * int(value)
+        value = 0.125 * float(value)
     elif unit in ["barspoon", "barspoons"]:
-        value = 0.25 * int(value)
+        value = 0.25 * float(value)
     elif unit in ["tsp", "teaspoon", "teaspoons"]:
-        value = int(value) / 6
+        value = float(value) / 6
     else:
         # assume it's a garnish or too small an amount to calculate
         value = 0.0
@@ -117,17 +117,17 @@ def get_ingredient_calories(ingredient: dict[str, str]) -> int:
 
     for spirit in ["bourbon", "gin", "rum", "tequila", "vodka", "whiskey"]:
         if spirit in name:
-            return int(value * 65)
+            return round(value * 65)
 
     for syrup in ["syrup", "grenadine", "orgeat"]:
         if syrup in name:
-            return int(value * 50)
+            return round(value * 50)
 
     if "bitters" in name:
-        return int(value * 10)
+        return round(value * 10)
 
     if "sugar" in name:
-        return int(value * 110)
+        return round(value * 110)
 
     return 0
 
